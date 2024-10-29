@@ -1,0 +1,19 @@
+{
+	"name": "@tmlmobilidade/configs",
+	"license": "MIT",
+	"repository": "https://github.com/tmlmobilidade/configs",
+	"private": true,
+	"scripts": {
+		"build": "turbo run build",
+		"dev": "turbo run dev",
+		"start": "turbo run start"
+	},
+	"workspaces": [
+		"backupd",
+		"tsconfig"
+	],
+	"devDependencies": {
+		"@carrismetropolitana/eslint": "20241017.1618.32",
+		"turbo": "^2.2.3"
+	}
+}

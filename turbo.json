@@ -1,0 +1,33 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"globalEnv": [
+		"*"
+	],
+	"tasks": {
+		"build": {
+			"dependsOn": [
+				"^build"
+			],
+			"outputs": [
+				"dist/**"
+			]
+		},
+		"dev": {
+			"cache": false,
+			"passThroughEnv": [
+				"*"
+			],
+			"persistent": true
+		},
+		"start": {
+			"dependsOn": [
+				"^build",
+				"^start"
+			],
+			"outputs": [
+				"dist/**"
+			]
+		}
+	},
+	"ui": "tui"
+}
