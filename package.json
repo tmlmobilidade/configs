@@ -5,8 +5,8 @@
 	"private": true,
 	"scripts": {
 		"build": "turbo run build",
-		"dev": "turbo run dev",
-		"start": "turbo run start"
+		"dev": "dotenv -- turbo run dev",
+		"start": "dotenv -- turbo run start"
 	},
 	"workspaces": [
 		"backupd",
@@ -15,5 +15,9 @@
 	"devDependencies": {
 		"@carrismetropolitana/eslint": "20241017.1618.32",
 		"turbo": "^2.2.3"
+	},
+	"packageManager": "yarn@4.5.1",
+	"dependencies": {
+		"dotenv-cli": "^7.4.2"
 	}
 }

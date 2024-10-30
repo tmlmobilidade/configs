@@ -4,7 +4,7 @@ import { DatabaseConfiguration, DatabaseFactory } from './database/database.fact
 import { MailerService } from './mailer/mailer.service';
 import { StorageConfiguration, StorageFactory } from './storage/storage.factory';
 
-const config = loadConfig(process.env.CONFIG_PATH);
+const config = loadConfig(process.env.BACKUPD_CONFIG_PATH);
 
 const databaseConfig: DatabaseConfiguration = {
 	mongodb_config: config.database.mongodb_config,
