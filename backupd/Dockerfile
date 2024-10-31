@@ -3,15 +3,16 @@
 ###########################
 FROM node:20.16-alpine AS base
 
-RUN apk add mongodb-tools
-RUN apk add postgresql-client
-
-RUN corepack enable
-RUN yarn set version 4.5.1
-
-RUN yarn global add turbo@^2
-
 ENV PROJECT=backupd
+
+RUN npm install -g turbo@^2
+RUN npm install -g pnpm@9.12.3
+
+# Install Mongo Tools
+RUN apk update && apk add mongodb-tools
+
+# Install PG Tools
+RUN apk update && apk add postgresql-client
 
 ###########################
 # Builder stage
@@ -31,13 +32,20 @@ FROM base AS builder
 
 WORKDIR /app
 
-# First install the dependencies (as they change less often)
+# Copy lockfile and package.json's of isolated subworkspace
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=pruner /app/out/json/ .
-RUN yarn install
+
+# First install the dependencies (as they change less often)
+RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --frozen-lockfile
+
 
 # Build the project
 COPY --from=pruner /app/out/full/ .
-RUN turbo run build --filter=@tmlmobilidade/${PROJECT}
+RUN turbo build --filter=@tmlmobilidade/${PROJECT}
+RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm prune --prod --no-optional
+RUN rm -rf ./**/*/src
 
 # ###########################
 # # Runner stage
@@ -48,4 +56,4 @@ WORKDIR /app
 
 COPY --from=builder /app .
 
-CMD node ${PROJECT}/dist/index.js
+CMD node $PROJECT/dist/index.js
