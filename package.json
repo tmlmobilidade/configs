@@ -8,16 +8,12 @@
 		"dev": "dotenv -- turbo run dev",
 		"start": "dotenv -- turbo run start"
 	},
-	"workspaces": [
-		"backupd",
-		"tsconfig"
-	],
+	"dependencies": {
+		"dotenv-cli": "^7.4.2"
+	},
 	"devDependencies": {
 		"@carrismetropolitana/eslint": "20241017.1618.32",
 		"turbo": "^2.2.3"
 	},
-	"packageManager": "yarn@4.5.1",
-	"dependencies": {
-		"dotenv-cli": "^7.4.2"
-	}
+	"packageManager": "pnpm@9.12.3"
 }
