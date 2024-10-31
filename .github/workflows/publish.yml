@@ -1,0 +1,31 @@
+name: Publish to NPM
+
+on:
+  push:
+    branches:
+      - production
+    paths:
+      - tsconfig/**
+
+jobs:
+  #
+
+  # # # # # # # # # # # # # # # # # # # # #
+  # # # # # # # # # # # # # # # # # # # # #
+
+  publish:
+    name: 'Publish to NPM'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Bump package version
+        working-directory: ./tsconfig
+        run: npx @helperkits/bumper bump
+
+      - name: Publish package to NPM
+        working-directory: ./tsconfig
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
