@@ -1,0 +1,20 @@
+name: tmlmobilidade-db-stops-prod-1
+
+secrets:
+  backupd_config:
+    file: ./secrets/backupd.yaml
+
+services:
+  db:
+    image: mongo:latest
+    ports:
+      - 27017:27017
+    volumes:
+      - ./data:/data/db
+    env_file:
+      - ./secrets/.env
+
+  backupd:
+    image: ghcr.io/tmlmobilidade/backupd:production
+    secrets:
+      - backupd_config
