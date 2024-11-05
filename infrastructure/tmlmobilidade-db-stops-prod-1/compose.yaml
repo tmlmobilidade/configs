@@ -2,7 +2,7 @@ name: tmlmobilidade-db-stops-prod-1
 
 secrets:
   backupd_config:
-    file: ./secrets/backupd.yaml
+    file: ./backupd.yaml
 
 services:
   db:
@@ -12,7 +12,7 @@ services:
     volumes:
       - ./data:/data/db
     env_file:
-      - ./secrets/.env
+      - ./.env
 
   backupd:
     image: ghcr.io/tmlmobilidade/backupd:production
