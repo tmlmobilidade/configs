@@ -1,0 +1,13 @@
+services:
+
+  shard-rides-prod-1:
+    image: mongo:latest
+    command: mongod --shardsvr --replSet shard1_rs --dbpath /data/db --port 27017
+    ports:
+      - 27017:27017
+    volumes:
+      - shard-rides-prod-1:/data/db
+
+volumes:
+  shard-rides-prod-1:
+

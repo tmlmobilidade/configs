@@ -1,0 +1,35 @@
+services:
+
+  router-rides-prod-1:
+    container_name: mongos
+    image: mongo:latest
+    command: mongos --configdb config_rs/<your-ip>:10001 --port 27017
+    ports:
+      - 27017:27017
+    volumes:
+      - ./init-router.sh:/docker-entrypoint-initdb.d/init-mongo.sh
+
+  config-rides-prod-1:
+    image: mongo:latest
+    command: mongod --configsvr --replSet config_rs --dbpath /data/db --port 27017
+    volumes:
+      - config-rides-prod-1:/data/db
+      - ./init-config.sh:/docker-entrypoint-initdb.d/init-mongo.sh
+
+  config-rides-prod-2:
+    image: mongo:latest
+    command: mongod --configsvr --replSet config_rs --dbpath /data/db --port 27017
+    volumes:
+      - config-rides-prod-2:/data/db
+
+  config-rides-prod-3:
+    image: mongo:latest
+    command: mongod --configsvr --replSet config_rs --dbpath /data/db --port 27017
+    volumes:
+      - config-rides-prod-3:/data/db
+
+volumes:
+  router-rides-prod-1:
+  config-rides-prod-1:
+  config-rides-prod-2:
+  config-rides-prod-3:
