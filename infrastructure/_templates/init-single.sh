@@ -4,9 +4,9 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
 # Title section
-echo "======================="
-echo "   TML Instance Setup  "
-echo "======================="
+echo "================================"
+echo "   TML Single Instance Setup    "
+echo "================================"
 
 # Prompt for service name and port
 read -p "Enter the service name: " SERVICE_NAME
