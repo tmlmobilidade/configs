@@ -1,114 +1,50 @@
-#!/bin/sh
+#!/bin/bash
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#                  PROMPT USER INPUT                  #
+#                      CONSTANTS                      #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-
-# Title section
-echo "\n"
-echo "# # # # # # # # # # # # # # # # # # # # # # # # # # # #"
-echo "#             TML Sharding Instance Setup             #"
-echo "# # # # # # # # # # # # # # # # # # # # # # # # # # # #"
-echo "\n"
-
-# Prompt for service name and port
-read -p "Enter the service name: " SERVICE_NAME
-
-mkdir -p $SERVICE_NAME
-cd $SERVICE_NAME
-
-# Convert service name to uppercase for variable prefix
-SERVICE_PREFIX=$(echo "$SERVICE_NAME" | tr '[:lower:]' '[:upper:]')
-
-# Prompt for the number of shards (max 5)
-while :; do
-  read -p "Enter the number of shards (1-5): " NUM_SHARDS
-  if [ "$NUM_SHARDS" -ge 1 ] && [ "$NUM_SHARDS" -le 5 ]; then
-    break
-  else
-    echo "Please enter a valid number between 1 and 5."
-  fi
-done
-
-# Prompt for the number of Read Replicas for each shard
-while :; do
-  read -p "Enter the number of Read Replicas for each shard (1-5): " NUM_READ_REPLICAS
-  if [ "$NUM_READ_REPLICAS" -ge 1 ] && [ "$NUM_READ_REPLICAS" -le 5 ]; then
-    break
-  else
-    echo "Please enter a valid number between 1 and 5."
-  fi
-done
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#                  GENERATE USERS                     #
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-
-# Define allowed characters for passwords (excluding !, ", #, $, /, and =)
-ALLOWED_CHARACTERS="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz&%"
 ALPHABET_LOWER="abcdefghijklmnopqrstuvwxyz"
 
-# Function to generate a random password of given length
-# generate_password() {
-#     local length=$1
-#     local password=""
-#     for i in $(seq 1 $length); do
-#         local index=$((RANDOM % ${#ALLOWED_CHARACTERS}))
-#         password="${password}${ALLOWED_CHARACTERS:$index:1}"
-#     done
-#     echo "$password"
-# }
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#                      FUNCTIONS                      #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
-# # Generate random passwords with service-specific prefixes
-# ADMIN_PASSWORD=$(generate_password 12)
-# READ_PASSWORD=$(generate_password 12)
-# WRITE_PASSWORD=$(generate_password 12)
+prompt_for_value() {
+  local VAR_NAME=$1
+  local MIN=$2
+  local MAX=$3
+  local SELECTED_VALUE=""
 
-echo "\n\n"
-echo "# # # # # # # # # # # # # # # # # # # # # # # # # # # #"
-echo "#                GENERATE COMPOSE FILE                #"
-echo "# # # # # # # # # # # # # # # # # # # # # # # # # # # #"
-echo "\n\n"
-
-cat <<EOF > compose.yaml
-name: tml-cluster-${SERVICE_NAME}
-
-secrets:
-  backupd_config:
-    file: ./backupd.yaml
-
-networks:
-  tml-cluster-${SERVICE_NAME}:
-
-volumes:
-  router-${SERVICE_NAME}-prod-1-db:
-  router-${SERVICE_NAME}-prod-1-config:
-
-  config-${SERVICE_NAME}-prod-1-db:
-  config-${SERVICE_NAME}-prod-1-config:
-
-  config-${SERVICE_NAME}-prod-2-db:
-  config-${SERVICE_NAME}-prod-2-config:
-
-  config-${SERVICE_NAME}-prod-3-db:
-  config-${SERVICE_NAME}-prod-3-config:
-EOF
-
-# Append shard volumes dynamically
-for i in $(seq 1 $NUM_SHARDS); do
-  for j in $(seq 1 $NUM_READ_REPLICAS); do
-  cat <<EOF >> compose.yaml
-  
-  shard-${SERVICE_NAME}-${i}-${ALPHABET_LOWER:$((j-1)):1}-db:
-  shard-${SERVICE_NAME}-${i}-${ALPHABET_LOWER:$((j-1)):1}-config:  
-EOF
+  while :; do
+      read -p "Enter the number of $VAR_NAME ($MIN-$MAX): " SELECTED_VALUE
+      if [ "$SELECTED_VALUE" -ge $MIN ] && [ "$SELECTED_VALUE" -le $MAX ]; then
+      break
+    else
+      echo "Please enter a valid number between $MIN and $MAX."
+    fi
   done
-done
 
-cat <<EOF >> compose.yaml
+  echo $SELECTED_VALUE
+}
 
-services:
+wait_for() {
+  local MESSAGE=$1
+  SECONDS=$2
+  for seconds in $(seq $SECONDS -1 1); do
+    printf "\rWaiting %d seconds for $MESSAGE..." "$seconds"
+    sleep 1
+  done
+  printf "\n"
+}
 
+replica_letter() {
+  local REPLICA_NUMBER=$1
+  echo "${ALPHABET_LOWER:$((REPLICA_NUMBER-1)):1}"
+}
+
+docker_service_watchtower() {
+  local SERVICE_NAME=$1
+  cat <<EOF
   watchtower:
     image: containrrr/watchtower
     command: --interval 30 --scope ${SERVICE_NAME}
@@ -131,199 +67,358 @@ services:
       - WATCHTOWER_INCLUDE_STOPPED=TRUE
       - WATCHTOWER_REVIVE_STOPPED=TRUE
       - WATCHTOWER_ROLLING_RESTART=TRUE
-    labels: ["com.centurylinklabs.watchtower.scope=${SERVICE_NAME}"]
+    labels:
+      - "com.centurylinklabs.watchtower.scope=${SERVICE_NAME}"
+EOF
+}
 
-  # TODO: FIX THIS
-  # backupd:
-  #   image: ghcr.io/tmlmobilidade/backupd:production
-  #   secrets:
-  #     - backupd_config
+docker_service_backup() {
+  local SERVICE_NAME=$1
+  cat <<EOF
+  backupd:
+    image: ghcr.io/tmlmobilidade/backupd:production
+    secrets:
+      - backupd_config
+EOF
+}
 
-  # # # # # # # # # # # # # # # # # # # # #
-  # # # # # # # # # # # # # # # # # # # # #
+docker_service_config() {
+  local SERVICE_NAME=$1
+  local TOTAL_REPLICAS=$2
 
-  router-${SERVICE_NAME}-prod-1:
+  for REPLICA_NUMBER in $(seq 1 "$TOTAL_REPLICAS"); do
+    cat <<EOF
+  config-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER"):
     image: mongo:latest
-    container_name: router-${SERVICE_NAME}-prod-1
-    command: mongos --port 27017 --configdb rs-config-server/config-${SERVICE_NAME}-prod-1:27017,config-${SERVICE_NAME}-prod-2:27017,config-${SERVICE_NAME}-prod-3:27017 --bind_ip_all
+    container_name: config-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")
+    command: mongod --configsvr --replSet rs-config-server --port 27017 --dbpath /data/db
+    restart: always
     ports:
-      - "27117:27017"
-    restart: always
+      - "3700${REPLICA_NUMBER}:27017"
     volumes:
-      - ./scripts:/scripts
-      - router-${SERVICE_NAME}-prod-1-db:/data/db
-      - router-${SERVICE_NAME}-prod-1-config:/data/configdb
+      - config-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")-data:/data/db
     networks:
-      - tml-cluster-${SERVICE_NAME}
-
-  # # # # # # # # # # # # # # # # # # # # #
-  # # # # # # # # # # # # # # # # # # # # #
+      - sharding
 EOF
-  for i in $(seq 1 3); do
-    cat <<EOF >> compose.yaml
-  config-${SERVICE_NAME}-prod-${i}:
+
+    if [ "$REPLICA_NUMBER" -eq 1 ]; then
+      cat <<EOF
+    depends_on:
+EOF
+      for NEXT_REPLICA_NUMBER in $(seq "$((REPLICA_NUMBER + 1))" "$TOTAL_REPLICAS"); do
+        cat <<EOF
+      - config-${SERVICE_NAME}-$(replica_letter "$NEXT_REPLICA_NUMBER")
+EOF
+      done
+    fi
+  done
+}
+
+docker_service_init_config() {
+  local SERVICE_NAME=$1
+  local TOTAL_REPLICAS=$2
+
+  cat <<EOF
+  init-config:
     image: mongo:latest
-    container_name: config-${SERVICE_NAME}-prod-${i}
-    command: mongod --port 27017 --configsvr --replSet rs-config-server
+    entrypoint: [ "sh", "-c", "chmod +x /data/init.sh && /data/init.sh" ]
+    restart: "no"
     volumes:
-      - ./scripts:/scripts
-      - config-${SERVICE_NAME}-prod-${i}-db:/data/db
-      - config-${SERVICE_NAME}-prod-${i}-config:/data/configdb
-    restart: always
+      - ./init-config.sh:/data/init.sh
     networks:
-      - tml-cluster-${SERVICE_NAME}
+      - sharding
+    depends_on:
 EOF
-done
-
-cat <<EOF >> compose.yaml
-  
-  # # # # # # # # # # # # # # # # # # # # #
-  # # # # # # # # # # # # # # # # # # # # #
-
-EOF
-
-# Append shard services dynamically
-for i in $(seq 1 $NUM_SHARDS); do
-  for j in $(seq 1 $NUM_READ_REPLICAS); do
-    cat <<EOF >> compose.yaml
-  shard-${SERVICE_NAME}-${i}-${ALPHABET_LOWER:$((j-1)):1}:
-    image: mongo:latest
-    container_name: shard-${SERVICE_NAME}-${i}-${ALPHABET_LOWER:$((j-1)):1}
-    command: mongod --port 27017 --shardsvr --replSet rs-shard-${i}
-    volumes:
-      - ./scripts:/scripts
-      - shard-${SERVICE_NAME}-${i}-${ALPHABET_LOWER:$((j-1)):1}-db:/data/db
-      - shard-${SERVICE_NAME}-${i}-${ALPHABET_LOWER:$((j-1)):1}-config:/data/configdb
-    restart: always
-    networks:
-      - tml-cluster-${SERVICE_NAME}
+  for REPLICA_NUMBER in $(seq 1 "$TOTAL_REPLICAS"); do
+    cat <<EOF
+      - config-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")
 EOF
   done
-done
+}
 
-echo "\n\n"
-echo "# # # # # # # # # # # # # # # # # # # # # # # # # # # #"
-echo "#                 GENERATE SCRIPTS                    #"
-echo "# # # # # # # # # # # # # # # # # # # # # # # # # # # #"
-echo "\n\n"
+docker_service_router() {
+  local SERVICE_NAME=$1
+  local TOTAL_REPLICAS=$2
 
-mkdir -p scripts
+  cat <<EOF
+  router-${SERVICE_NAME}:
+    image: mongo:latest
+    container_name: router-${SERVICE_NAME}
+    command: mongos --configdb rs-config-server/config-${SERVICE_NAME}-a:27017,config-${SERVICE_NAME}-b:27017,config-${SERVICE_NAME}-b:27017  --bind_ip_all
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - router-${SERVICE_NAME}-data:/data/db
+    networks:
+      - sharding
 
-# # # # # Generate init-shard files # # # # #
-for i in $(seq 1 $NUM_SHARDS); do
-  echo "Generating init-shard-${i}.js file..."
-  cat <<EOF > scripts/init-shard-${i}.js
-  rs.initiate({
-	_id: 'rs-shard-${i}',
-	version: 1,
-	members: [
+  init-router:
+    image: mongo:latest
+    entrypoint: [ "sh", "-c", "chmod +x /data/init.sh && /data/init.sh" ]
+    restart: "no"
+    networks:
+      - sharding
+    volumes:
+      - ./init-router.sh:/data/init.sh
+    depends_on:
+      - router-${SERVICE_NAME}
 EOF
-  for j in $(seq 1 $NUM_READ_REPLICAS); do
-    cat <<EOF >> scripts/init-shard-${i}.js
-      { _id: ${j}, host : "shard-${SERVICE_NAME}-${i}-${ALPHABET_LOWER:$((j-1)):1}:27017" },
+  for REPLICA_NUMBER in $(seq 1 "$TOTAL_REPLICAS"); do
+    cat <<EOF
+      - config-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")
 EOF
   done
-  cat <<EOF >> scripts/init-shard-${i}.js
-	],
-});
+}
+
+docker_service_shard() {
+  local SERVICE_NAME=$1
+  local REPLICA_NUMBER=$2
+  local SHARD_NUMBER=$3
+
+  cat <<EOF
+  shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER"):
+    image: mongo:latest
+    container_name: shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")
+    command: mongod --shardsvr --replSet rs-shard-${SHARD_NUMBER} --port 27017 --dbpath /data/db
+    restart: always
+    ports:
+      - "37${SHARD_NUMBER}0${REPLICA_NUMBER}:27017"
+    volumes:
+      - shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")-data:/data/db
+    networks:
+      - sharding
+
 EOF
-done
+  if [ $REPLICA_NUMBER -eq 1 ]; then
+    cat <<EOF
+  init-shard-${SHARD_NUMBER}-${SERVICE_NAME}:
+    image: mongo:latest
+    entrypoint: [ "sh", "-c", "chmod +x /data/init.sh && /data/init.sh" ]
+    restart: "no"
+    volumes:
+      - ./init-shard.sh:/data/init.sh
+    networks:
+      - sharding
+    depends_on:
+      - shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")
+EOF
+  fi
+}
 
-echo "Generating init-config-server.js file..."
+script_init_config() {
+  local SERVICE_NAME=$1
+  local TOTAL_REPLICAS=$2
 
-cat <<EOF > scripts/init-config-server.js
+  cat <<EOF
+#!/bin/bash
+
+sleep 5
+
+# Initiate the replica set
+mongosh --host config-${SERVICE_NAME}-a:27017 <<EOF_MONGO
 rs.initiate({
-	_id: 'rs-config-server',
-	configsvr: true,
-	version: 1,
-	members: [
-		{ _id: 0, host: 'config-${SERVICE_NAME}-prod-1:27017' },
-		{ _id: 1, host: 'config-${SERVICE_NAME}-prod-2:27017' },
-		{ _id: 2, host: 'config-${SERVICE_NAME}-prod-3:27017' },
-	],
-});
+  _id: "rs-config-server",
+  configsvr: true,
+  members: [
 EOF
+  for REPLICA_NUMBER in $(seq 1 "$TOTAL_REPLICAS"); do
+    cat <<EOF
+    { _id: $((REPLICA_NUMBER - 1)), host: "config-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER"):27017" },
+EOF
+  done
+  cat <<EOF
+  ]
+});
+EOF_MONGO
 
-# # # # # Generate init-router.js file # # # # #
-echo "Generating init-router.js file..."
+# Wait for mongod process to keep the container running
+wait \$MONGOD_PID
+EOF
+}
+
+script_init_router() {
+  local SERVICE_NAME=$1
+  local TOTAL_REPLICAS=$2
+  local TOTAL_SHARDS=$3
+
+  cat <<EOF
+#!/bin/bash
+
+sleep 20
+
+mongosh --host router-${SERVICE_NAME}:27017 <<EOF_MONGO
+EOF
+  for SHARD_NUMBER in $(seq 1 "$TOTAL_SHARDS"); do
+    for REPLICA_NUMBER in $(seq 1 "$TOTAL_REPLICAS"); do
+      cat <<EOF
+sh.addShard("rs-shard-${SHARD_NUMBER}/shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")")
+EOF
+    done
+  done
+  cat <<EOF
+sh.enableSharding("production")
+
+EOF_MONGO
+
+# Wait for mongod process to keep the container running
+wait \$MONGOD_PID
+EOF
+}
+
+script_init_shard() {
+  local SERVICE_NAME=$1
+  local TOTAL_REPLICAS=$2
+  local SHARD_NUMBER=$3
+
+  cat <<EOF
+#!/bin/bash
+
+sleep 5
+
+# Initiate the replica set
+mongosh --host shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-a:27017 <<EOF_MONGO
+rs.initiate({
+  _id: "rs-shard-${SHARD_NUMBER}",
+  members: [
+EOF
+  for REPLICA_NUMBER in $(seq 1 "$TOTAL_REPLICAS"); do
+    cat <<EOF
+    { _id: $((REPLICA_NUMBER - 1)), host: "shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER"):27017" },
+EOF
+  done
+  cat <<EOF
+  ]
+});
+EOF_MONGO
+
+# Wait for mongod process to keep the container running
+wait \$MONGOD_PID
+EOF
+}
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#                  PROMPT USER INPUT                  #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+echo "\n"
+echo "+-----------------------------------------------+"
+echo "|          TML SHARDING INSTANCE SETUP          |"
+echo "+-----------------------------------------------+"
+echo "\n"
+
+read -p "Enter the service name: " SERVICE_NAME
+NUM_SHARDS=$(prompt_for_value "shards" 1 5)
+NUM_READ_REPLICAS=$(prompt_for_value "read replicas" 1 5)
+
+RUN_LOCALLY=""
+while true; do
+  read -p "Run All Locally (For Testing Purposes)? (y/n): " RUN_LOCALLY
+  case $RUN_LOCALLY in
+    y|Y) break ;;
+    n|N) break ;;
+    *) echo "Please enter a valid option (y/n)." ;;
+  esac
+done
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#                  BUILD DIRECTORIES                  #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+mkdir -p $SERVICE_NAME
+cd $SERVICE_NAME
+
+mkdir -p 0-router-config
 
 for i in $(seq 1 $NUM_SHARDS); do
   for j in $(seq 1 $NUM_READ_REPLICAS); do
-    echo "sh.addShard(\"rs-shard-${i}/shard-${SERVICE_NAME}-${i}-${ALPHABET_LOWER:$((j-1)):1}:27017\");" >> scripts/init-router.js
+    mkdir -p $i-${SERVICE_NAME}-$(replica_letter "$j")
   done
 done
 
-# TODO: FIX USER CREATION
-echo "sh.enableSharding(\"production\");" >> scripts/init-router.js
-# cat <<EOF >> scripts/init-router.js
-# sh.enableSharding("production");
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#              Router & Config Servers                #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+# ===== Generate scripts =====
+script_init_config $SERVICE_NAME 3 > 0-router-config/init-config.sh
+script_init_router $SERVICE_NAME $NUM_READ_REPLICAS $NUM_SHARDS > 0-router-config/init-router.sh
 
-# // Create a read-only user
-# db.createUser({
-#   user: "read",
-#   pwd: "${READ_PASSWORD}",
-#   roles: [ { role: "read", db: "admin" } ]
-# })
+# ===== Generate docker-compose.yaml =====
 
-# // Create a read-write user
-# db.createUser({
-#   user: "write",
-#   pwd: "${WRITE_PASSWORD}",
-#   roles: [ { role: "readWrite", db: "admin" } ]
-# })
-# EOF
+cat <<EOF > 0-router-config/docker-compose.yaml
+name: tml-cluster-${SERVICE_NAME}
 
-echo "\n\n"
-echo "# # # # # # # # # # # # # # # # # # # # # # # # # # # #"
-echo "#                  Setup Environment                  #"
-echo "# # # # # # # # # # # # # # # # # # # # # # # # # # # #"
-echo "\n\n"
+networks:
+  sharding:
+    name: cluster-${SERVICE_NAME}-network
+    driver: bridge
 
-docker-compose up -d
+volumes:
+  router-${SERVICE_NAME}-data:
+EOF
+  for j in $(seq 1 3); do
+    cat <<EOF >> 0-router-config/docker-compose.yaml
+  config-${SERVICE_NAME}-$(replica_letter "$j")-data:
+EOF
+  done
+cat <<EOF >> 0-router-config/docker-compose.yaml
 
-# Wait for the docker containers to initialize
-for seconds in {10..1}; do
-  printf "\rWaiting %d seconds for the docker containers to initialize..." "$seconds"
-  sleep 1
-done
-printf "\n"
+services:
+$(docker_service_config $SERVICE_NAME 3)
 
-# Initialize the config server
-docker-compose exec config-${SERVICE_NAME}-prod-1 sh -c "mongosh < /scripts/init-config-server.js"
+$(docker_service_init_config $SERVICE_NAME 3)
 
-# Initialize the shards
+$(docker_service_router $SERVICE_NAME $NUM_READ_REPLICAS $NUM_SHARDS)
+EOF
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#                   Shards Servers                    #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+# ===== Generate scripts =====
 for i in $(seq 1 $NUM_SHARDS); do
-  docker-compose exec shard-${SERVICE_NAME}-${i}-a sh -c "mongosh < /scripts/init-shard-${i}.js"
+  for j in $(seq 1 $NUM_READ_REPLICAS); do
+    if [ $j -eq 1 ]; then
+      script_init_shard $SERVICE_NAME $NUM_READ_REPLICAS $i > $i-${SERVICE_NAME}-$(replica_letter "$j")/init-shard.sh
+    fi
+  done
 done
 
-# Wait for the shards to initialize
-for seconds in {20..1}; do
-  printf "\rWaiting %d seconds for the shards to initialize..." "$seconds"
-  sleep 1
+# ===== Generate docker-compose.yaml =====
+for i in $(seq 1 $NUM_SHARDS); do
+  for j in $(seq 1 $NUM_READ_REPLICAS); do
+    cat <<EOF >> $i-${SERVICE_NAME}-$(replica_letter "$j")/docker-compose.yaml
+name: tml-cluster-${SERVICE_NAME}-shard-${i}-$(replica_letter "$j")
+
+networks:
+  sharding:
+    name: cluster-${SERVICE_NAME}-network
+    driver: bridge
+
+volumes:
+  shardsvr-${i}-${SERVICE_NAME}-$(replica_letter "$j")-data:
+
+services:
+$(docker_service_shard $SERVICE_NAME $j $i)
+EOF
+  done
 done
-printf "\n"
 
-# Initialize the router
-docker-compose exec router-${SERVICE_NAME}-prod-1 sh -c "mongosh < /scripts/init-router.js"
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#                   Setup environment                 #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
-echo "\n\n"
+if [ "$RUN_LOCALLY" != "y" ]; then
+  exit 0
+fi
 
-# Export dynamic environment variables
-export "${SERVICE_PREFIX}_SERVICE_NAME=$SERVICE_NAME"
-export "${SERVICE_PREFIX}_ADMIN_USERNAME=admin"
-export "${SERVICE_PREFIX}_ADMIN_PASSWORD=$ADMIN_PASSWORD"
-export "${SERVICE_PREFIX}_READ_USERNAME=read"
-export "${SERVICE_PREFIX}_READ_PASSWORD=$READ_PASSWORD"
-export "${SERVICE_PREFIX}_WRITE_USERNAME=write"
-export "${SERVICE_PREFIX}_WRITE_PASSWORD=$WRITE_PASSWORD"
+# Run docker compose for shards
+for i in $(seq $NUM_SHARDS -1 1); do
+  for j in $(seq $NUM_READ_REPLICAS -1 1); do
+    docker compose -f $i-${SERVICE_NAME}-${ALPHABET_LOWER:$((j-1)):1}/docker-compose.yaml up -d
+  done
+done
 
-echo "Environment variables set:"
-echo "  ${SERVICE_PREFIX}_ADMIN_USERNAME: admin"
-echo "  ${SERVICE_PREFIX}_ADMIN_PASSWORD: $ADMIN_PASSWORD"
-echo "  ${SERVICE_PREFIX}_READ_USERNAME: read"
-echo "  ${SERVICE_PREFIX}_READ_PASSWORD: $READ_PASSWORD"
-echo "  ${SERVICE_PREFIX}_WRITE_USERNAME: write"
-echo "  ${SERVICE_PREFIX}_WRITE_PASSWORD: $WRITE_PASSWORD"
+wait_for "shards to initialize" 5
 
-cd ..
+docker compose -f 0-router-config/docker-compose.yaml up -d
