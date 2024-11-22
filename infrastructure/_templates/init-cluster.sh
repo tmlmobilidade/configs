@@ -88,15 +88,17 @@ docker_service_config() {
 
   for REPLICA_NUMBER in $(seq 1 "$TOTAL_REPLICAS"); do
     cat <<EOF
-  config-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER"):
+  ${SERVICE_NAME}-config-$(replica_letter "$REPLICA_NUMBER"):
     image: mongo:latest
-    container_name: config-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")
+    container_name: ${SERVICE_NAME}-config-$(replica_letter "$REPLICA_NUMBER")
     command: mongod --configsvr --replSet rs-config-server --port 27017 --dbpath /data/db
     restart: always
     ports:
-      - "3700${REPLICA_NUMBER}:27017"
+      $(if [ "$LOCAL_SETUP" = true ]; then
+        echo "- \"3700${REPLICA_NUMBER}:27017\""
+      fi)
     volumes:
-      - config-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")-data:/data/db
+      - ${SERVICE_NAME}-config-$(replica_letter "$REPLICA_NUMBER")-data:/data/db
     networks:
       - sharding
 EOF
@@ -107,7 +109,7 @@ EOF
 EOF
       for NEXT_REPLICA_NUMBER in $(seq "$((REPLICA_NUMBER + 1))" "$TOTAL_REPLICAS"); do
         cat <<EOF
-      - config-${SERVICE_NAME}-$(replica_letter "$NEXT_REPLICA_NUMBER")
+      - ${SERVICE_NAME}-config-$(replica_letter "$NEXT_REPLICA_NUMBER")
 EOF
       done
     fi
@@ -131,7 +133,7 @@ docker_service_init_config() {
 EOF
   for REPLICA_NUMBER in $(seq 1 "$TOTAL_REPLICAS"); do
     cat <<EOF
-      - config-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")
+      - ${SERVICE_NAME}-config-$(replica_letter "$REPLICA_NUMBER")
 EOF
   done
 }
@@ -141,15 +143,15 @@ docker_service_router() {
   local TOTAL_REPLICAS=$2
 
   cat <<EOF
-  router-${SERVICE_NAME}:
+  ${SERVICE_NAME}-router:
     image: mongo:latest
-    container_name: router-${SERVICE_NAME}
-    command: mongos --configdb rs-config-server/config-${SERVICE_NAME}-a:27017,config-${SERVICE_NAME}-b:27017,config-${SERVICE_NAME}-b:27017  --bind_ip_all
+    container_name: ${SERVICE_NAME}-router
+    command: mongos --configdb rs-config-server/${SERVICE_NAME}-config-a:27017,${SERVICE_NAME}-config-b:27017,${SERVICE_NAME}-config-c:27017  --bind_ip_all
     restart: always
     ports:
       - "27017:27017"
     volumes:
-      - router-${SERVICE_NAME}-data:/data/db
+      - ${SERVICE_NAME}-router-data:/data/db
     networks:
       - sharding
 
@@ -162,11 +164,11 @@ docker_service_router() {
     volumes:
       - ./init-router.sh:/data/init.sh
     depends_on:
-      - router-${SERVICE_NAME}
+      - ${SERVICE_NAME}-router
 EOF
   for REPLICA_NUMBER in $(seq 1 "$TOTAL_REPLICAS"); do
     cat <<EOF
-      - config-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")
+      - ${SERVICE_NAME}-config-$(replica_letter "$REPLICA_NUMBER")
 EOF
   done
 }
@@ -177,22 +179,26 @@ docker_service_shard() {
   local SHARD_NUMBER=$3
 
   cat <<EOF
-  shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER"):
+  ${SERVICE_NAME}-shardsvr-${SHARD_NUMBER}-$(replica_letter "$REPLICA_NUMBER"):
     image: mongo:latest
-    container_name: shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")
+    container_name: ${SERVICE_NAME}-shardsvr-${SHARD_NUMBER}-$(replica_letter "$REPLICA_NUMBER")
     command: mongod --shardsvr --replSet rs-shard-${SHARD_NUMBER} --port 27017 --dbpath /data/db
     restart: always
     ports:
-      - "37${SHARD_NUMBER}0${REPLICA_NUMBER}:27017"
+      $(if [ "$LOCAL_SETUP" = true ]; then
+        echo "- \"270${SHARD_NUMBER}${REPLICA_NUMBER}:27017\""
+      else
+        echo "- \"27017:27017\""
+      fi)
     volumes:
-      - shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")-data:/data/db
+      - ${SERVICE_NAME}-shardsvr-${SHARD_NUMBER}-$(replica_letter "$REPLICA_NUMBER")-data:/data/db
     networks:
       - sharding
 
 EOF
   if [ $REPLICA_NUMBER -eq 1 ]; then
     cat <<EOF
-  init-shard-${SHARD_NUMBER}-${SERVICE_NAME}:
+  init-shard-${SHARD_NUMBER}:
     image: mongo:latest
     entrypoint: [ "sh", "-c", "chmod +x /data/init.sh && /data/init.sh" ]
     restart: "no"
@@ -201,7 +207,7 @@ EOF
     networks:
       - sharding
     depends_on:
-      - shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")
+      - ${SERVICE_NAME}-shardsvr-${SHARD_NUMBER}-$(replica_letter "$REPLICA_NUMBER")
 EOF
   fi
 }
@@ -216,7 +222,7 @@ script_init_config() {
 sleep 5
 
 # Initiate the replica set
-mongosh --host config-${SERVICE_NAME}-a:27017 <<EOF_MONGO
+mongosh --host ${SERVICE_NAME}-config-a:27017 <<EOF_MONGO
 rs.initiate({
   _id: "rs-config-server",
   configsvr: true,
@@ -224,7 +230,7 @@ rs.initiate({
 EOF
   for REPLICA_NUMBER in $(seq 1 "$TOTAL_REPLICAS"); do
     cat <<EOF
-    { _id: $((REPLICA_NUMBER - 1)), host: "config-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER"):27017" },
+    { _id: $((REPLICA_NUMBER - 1)), host: "${SERVICE_NAME}-config-$(replica_letter "$REPLICA_NUMBER"):27017" },
 EOF
   done
   cat <<EOF
@@ -247,12 +253,12 @@ script_init_router() {
 
 sleep 20
 
-mongosh --host router-${SERVICE_NAME}:27017 <<EOF_MONGO
+mongosh --host ${SERVICE_NAME}-router:27017 <<EOF_MONGO
 EOF
   for SHARD_NUMBER in $(seq 1 "$TOTAL_SHARDS"); do
     for REPLICA_NUMBER in $(seq 1 "$TOTAL_REPLICAS"); do
       cat <<EOF
-sh.addShard("rs-shard-${SHARD_NUMBER}/shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER")")
+sh.addShard("rs-shard-${SHARD_NUMBER}/${SERVICE_NAME}-shardsvr-${SHARD_NUMBER}-$(replica_letter "$REPLICA_NUMBER")")
 EOF
     done
   done
@@ -277,14 +283,14 @@ script_init_shard() {
 sleep 5
 
 # Initiate the replica set
-mongosh --host shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-a:27017 <<EOF_MONGO
+mongosh --host ${SERVICE_NAME}-shardsvr-${SHARD_NUMBER}-a:27017 <<EOF_MONGO
 rs.initiate({
   _id: "rs-shard-${SHARD_NUMBER}",
   members: [
 EOF
   for REPLICA_NUMBER in $(seq 1 "$TOTAL_REPLICAS"); do
     cat <<EOF
-    { _id: $((REPLICA_NUMBER - 1)), host: "shardsvr-${SHARD_NUMBER}-${SERVICE_NAME}-$(replica_letter "$REPLICA_NUMBER"):27017" },
+    { _id: $((REPLICA_NUMBER - 1)), host: "${SERVICE_NAME}-shardsvr-${SHARD_NUMBER}-$(replica_letter "$REPLICA_NUMBER"):27017" },
 EOF
   done
   cat <<EOF
@@ -311,15 +317,12 @@ read -p "Enter the service name: " SERVICE_NAME
 NUM_SHARDS=$(prompt_for_value "shards" 1 5)
 NUM_READ_REPLICAS=$(prompt_for_value "read replicas" 1 5)
 
-RUN_LOCALLY=""
-while true; do
-  read -p "Run All Locally (For Testing Purposes)? (y/n): " RUN_LOCALLY
-  case $RUN_LOCALLY in
-    y|Y) break ;;
-    n|N) break ;;
-    *) echo "Please enter a valid option (y/n)." ;;
-  esac
-done
+read -p "Is this a local setup (testing purposes)? (y/N): " RUN_LOCALLY
+LOCAL_SETUP=false
+
+if [[ "$RUN_LOCALLY" =~ ^[yY]$ ]]; then
+  LOCAL_SETUP=true
+fi
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                  BUILD DIRECTORIES                  #
@@ -331,7 +334,7 @@ mkdir -p 0-router-config
 
 for i in $(seq 1 $NUM_SHARDS); do
   for j in $(seq 1 $NUM_READ_REPLICAS); do
-    mkdir -p $i-${SERVICE_NAME}-$(replica_letter "$j")
+    mkdir -p ${SERVICE_NAME}-shardsvr-${i}-$(replica_letter "$j")
   done
 done
 
@@ -354,11 +357,11 @@ networks:
     driver: bridge
 
 volumes:
-  router-${SERVICE_NAME}-data:
+  ${SERVICE_NAME}-router-data:
 EOF
   for j in $(seq 1 3); do
     cat <<EOF >> 0-router-config/docker-compose.yaml
-  config-${SERVICE_NAME}-$(replica_letter "$j")-data:
+  ${SERVICE_NAME}-config-$(replica_letter "$j")-data:
 EOF
   done
 cat <<EOF >> 0-router-config/docker-compose.yaml
@@ -379,7 +382,7 @@ EOF
 for i in $(seq 1 $NUM_SHARDS); do
   for j in $(seq 1 $NUM_READ_REPLICAS); do
     if [ $j -eq 1 ]; then
-      script_init_shard $SERVICE_NAME $NUM_READ_REPLICAS $i > $i-${SERVICE_NAME}-$(replica_letter "$j")/init-shard.sh
+      script_init_shard $SERVICE_NAME $NUM_READ_REPLICAS $i > ${SERVICE_NAME}-shardsvr-${i}-$(replica_letter "$j")/init-shard.sh
     fi
   done
 done
@@ -387,8 +390,8 @@ done
 # ===== Generate docker-compose.yaml =====
 for i in $(seq 1 $NUM_SHARDS); do
   for j in $(seq 1 $NUM_READ_REPLICAS); do
-    cat <<EOF >> $i-${SERVICE_NAME}-$(replica_letter "$j")/docker-compose.yaml
-name: tml-cluster-${SERVICE_NAME}-shard-${i}-$(replica_letter "$j")
+    cat <<EOF >> ${SERVICE_NAME}-shardsvr-${i}-$(replica_letter "$j")/docker-compose.yaml
+name: tml-cluster-${SERVICE_NAME}-shardsvr-${i}-$(replica_letter "$j")
 
 networks:
   sharding:
@@ -396,7 +399,7 @@ networks:
     driver: bridge
 
 volumes:
-  shardsvr-${i}-${SERVICE_NAME}-$(replica_letter "$j")-data:
+  ${SERVICE_NAME}-shardsvr-${i}-$(replica_letter "$j")-data:
 
 services:
 $(docker_service_shard $SERVICE_NAME $j $i)
@@ -408,14 +411,14 @@ done
 #                   Setup environment                 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
-if [ "$RUN_LOCALLY" != "y" ]; then
+if [ "$LOCAL_SETUP" = false ]; then
   exit 0
 fi
 
 # Run docker compose for shards
 for i in $(seq $NUM_SHARDS -1 1); do
   for j in $(seq $NUM_READ_REPLICAS -1 1); do
-    docker compose -f $i-${SERVICE_NAME}-${ALPHABET_LOWER:$((j-1)):1}/docker-compose.yaml up -d
+    docker compose -f ${SERVICE_NAME}-shardsvr-${i}-$(replica_letter "$j")/docker-compose.yaml up -d
   done
 done
 
