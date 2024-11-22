@@ -303,6 +303,57 @@ wait \$MONGOD_PID
 EOF
 }
 
+script_setup() {
+  cat <<EOF
+underscore_to_dash() {
+  var=\$1
+  echo "\${var//_/-}"
+}
+
+dash_to_underscore() {
+  var=\$1
+  echo "\${var//-/_}"
+}
+
+### MODIFY SHARD INIT FILES ###
+for var in \$(compgen -v "SHARD_"); do
+  shard_name=\$(underscore_to_dash "\${var#SHARD_}")
+  init_shard_file="\${shard_name%??}-a/init-shard.sh"
+
+  ip="\${!var}"
+
+  output=\$(sed "s/host: \"\${shard_name}/host: \"\${ip}/g" "\${init_shard_file}")
+  echo "\${output}" > "\${init_shard_file}"
+done
+
+
+### MODIFY ROUTER INIT FILE ###
+init_router_file="0-router-config/init-router.sh"
+
+for var in \$(compgen -v "SHARD_"); do
+
+  # Extract shard name from folder (replace underscores back to dashes)
+  shard_name=\$(underscore_to_dash "\${var#SHARD_}")
+  ip="\${!var}"
+
+  output=\$(sed "s/\${shard_name}/\${ip}:27017/g" "\${init_router_file}")
+  echo "\${output}" > "\${init_router_file}"
+done
+
+### MODIFY CONFIG INIT FILE ###
+init_config_file="0-router-config/init-config.sh"
+
+for var in \$(compgen -v "CONFIG_"); do
+
+  shard_name=\$(underscore_to_dash "\${var#CONFIG_}")
+  ip="\${!var}"
+
+  output=\$(sed "s/host: \"\${shard_name}/host: \"\${ip}/g" "\${init_config_file}")
+  echo "\${output}" > "\${init_config_file}"
+done
+EOF
+}
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                  PROMPT USER INPUT                  #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
@@ -411,9 +462,7 @@ done
 #                   Setup environment                 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
-if [ "$LOCAL_SETUP" = false ]; then
-  exit 0
-fi
+if [ "$LOCAL_SETUP" = true ]; then
 
 # Run docker compose for shards
 for i in $(seq $NUM_SHARDS -1 1); do
@@ -425,3 +474,32 @@ done
 wait_for "shards to initialize" 5
 
 docker compose -f 0-router-config/docker-compose.yaml up -d
+
+exit 0
+fi
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#               PRODUCTION SETUP SCRIPT               #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+cat <<EOF_SETUP > setup.sh
+#!/bin/bash
+
+# ROUTER
+ROUTER_${SERVICE_NAME}_router=""
+
+# CONFIG
+CONFIG_${SERVICE_NAME}_config_a=""
+CONFIG_${SERVICE_NAME}_config_b=""
+CONFIG_${SERVICE_NAME}_config_c=""
+
+# Shards
+$(for i in $(seq 1 $NUM_SHARDS); do
+  for j in $(seq 1 $NUM_READ_REPLICAS); do
+    echo "SHARD_${SERVICE_NAME}_shardsvr_${i}_$(replica_letter "$j")=\"\""
+  done
+done)
+
+$(script_setup)
+EOF_SETUP
