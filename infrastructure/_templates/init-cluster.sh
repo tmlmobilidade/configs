@@ -93,10 +93,10 @@ docker_service_config() {
     container_name: ${SERVICE_NAME}-config-$(replica_letter "$REPLICA_NUMBER")
     command: mongod --configsvr --replSet rs-config-server --port 27017 --dbpath /data/db
     restart: always
-    ports:
-      $(if [ "$LOCAL_SETUP" = true ]; then
-        echo "- \"3700${REPLICA_NUMBER}:27017\""
-      fi)
+    $(if [ "$LOCAL_SETUP" = true ]; then
+      echo "ports:" 
+      echo "      - \"3700${REPLICA_NUMBER}:27017\""
+    fi)
     volumes:
       - ${SERVICE_NAME}-config-$(replica_letter "$REPLICA_NUMBER")-data:/data/db
     networks:
@@ -331,6 +331,9 @@ done
 init_router_file="0-router-config/init-router.sh"
 
 for var in \$(compgen -v "SHARD_"); do
+  if [[ -z "\${!var}" ]]; then
+    continue
+  fi
 
   # Extract shard name from folder (replace underscores back to dashes)
   shard_name=\$(underscore_to_dash "\${var#SHARD_}")
@@ -345,11 +348,58 @@ init_config_file="0-router-config/init-config.sh"
 
 for var in \$(compgen -v "CONFIG_"); do
 
+  if [[ -z "\${!var}" ]]; then
+    continue
+  fi
+
   shard_name=\$(underscore_to_dash "\${var#CONFIG_}")
   ip="\${!var}"
 
   output=\$(sed "s/host: \"\${shard_name}/host: \"\${ip}/g" "\${init_config_file}")
   echo "\${output}" > "\${init_config_file}"
+done
+
+### Configure SSH ###
+if [[ -z "\$SSH_KEY" ]]; then
+  echo "SSH_KEY environment variable is not set."
+  exit 1
+fi
+
+for var in \$(compgen -v | tail -r); do
+  # Check for variables with the desired prefixes
+  if [[ \$var == ROUTER_* || \$var == SHARD_* ]]; then
+    # Extract the IP address
+    ip=\${!var}
+    echo "Connecting to \$ip (\$var)..."
+
+    # Copy contents of folders to the machine
+    if [[ \$var == ROUTER_* ]]; then
+
+      # check if the directory exists and allow the user to write to it
+      ssh -i "\$SSH_KEY" "\$SSH_USER@\$ip" \\
+        "if [ ! -d /opt/app ]; then sudo mkdir -p /opt/app; fi && \\
+        sudo chown -R \$SSH_USER:\$SSH_USER /opt/app && \\
+        sudo chmod -R u+rwx /opt/app"
+
+      scp -i "\$SSH_KEY" -r 0-router-config/* "\$SSH_USER@\$ip:/opt/app"
+
+      ssh -i "\$SSH_KEY" "\$SSH_USER@\$ip" "cd /opt/app && docker compose up -d"
+    fi
+
+    if [[ \$var == SHARD_* ]]; then
+      shard_name=\$(underscore_to_dash "\${var#SHARD_}")
+
+      # check if the directory exists and allow the user to write to it
+      ssh -i "\$SSH_KEY" "\$SSH_USER@\$ip" \\
+        "if [ ! -d /opt/app ]; then sudo mkdir -p /opt/app; fi && \\
+        sudo chown -R \$SSH_USER:\$SSH_USER /opt/app && \\
+        sudo chmod -R u+rwx /opt/app"
+
+      scp -i "\$SSH_KEY" -r "\${shard_name}"/* "\$SSH_USER@\$ip:/opt/app"
+
+      ssh -i "\$SSH_KEY" "\$SSH_USER@\$ip" "cd /opt/app && docker compose up -d"
+    fi
+  fi
 done
 EOF
 }
@@ -486,18 +536,22 @@ fi
 cat <<EOF_SETUP > setup.sh
 #!/bin/bash
 
+# SSH
+SSH_KEY=""
+SSH_USER="ubuntu"
+
 # ROUTER
-ROUTER_${SERVICE_NAME}_router=""
+ROUTER_${SERVICE_NAME//-/_}_router=""
 
 # CONFIG
-CONFIG_${SERVICE_NAME}_config_a=""
-CONFIG_${SERVICE_NAME}_config_b=""
-CONFIG_${SERVICE_NAME}_config_c=""
+CONFIG_${SERVICE_NAME//-/_}_config_a=""
+CONFIG_${SERVICE_NAME//-/_}_config_b=""
+CONFIG_${SERVICE_NAME//-/_}_config_c=""
 
 # Shards
 $(for i in $(seq 1 $NUM_SHARDS); do
   for j in $(seq 1 $NUM_READ_REPLICAS); do
-    echo "SHARD_${SERVICE_NAME}_shardsvr_${i}_$(replica_letter "$j")=\"\""
+    echo "SHARD_${SERVICE_NAME//-/_}_shardsvr_${i}_$(replica_letter "$j")=\"\""
   done
 done)
 
