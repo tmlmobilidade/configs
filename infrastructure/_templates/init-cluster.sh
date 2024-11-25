@@ -375,28 +375,20 @@ for var in \$(compgen -v | tail -r); do
     # Copy contents of folders to the machine
     if [[ \$var == ROUTER_* ]]; then
 
-      # check if the directory exists and allow the user to write to it
-      ssh -i "\$SSH_KEY" "\$SSH_USER@\$ip" \\
-        "if [ ! -d /opt/app ]; then sudo mkdir -p /opt/app; fi && \\
-        sudo chown -R \$SSH_USER:\$SSH_USER /opt/app && \\
-        sudo chmod -R u+rwx /opt/app"
-
+      # copy the docker compose file
       scp -i "\$SSH_KEY" -r 0-router-config/* "\$SSH_USER@\$ip:/opt/app"
 
+      # start the services 
       ssh -i "\$SSH_KEY" "\$SSH_USER@\$ip" "cd /opt/app && docker compose up -d"
     fi
 
     if [[ \$var == SHARD_* ]]; then
       shard_name=\$(underscore_to_dash "\${var#SHARD_}")
 
-      # check if the directory exists and allow the user to write to it
-      ssh -i "\$SSH_KEY" "\$SSH_USER@\$ip" \\
-        "if [ ! -d /opt/app ]; then sudo mkdir -p /opt/app; fi && \\
-        sudo chown -R \$SSH_USER:\$SSH_USER /opt/app && \\
-        sudo chmod -R u+rwx /opt/app"
-
+      # copy the shard files
       scp -i "\$SSH_KEY" -r "\${shard_name}"/* "\$SSH_USER@\$ip:/opt/app"
 
+      # start the services
       ssh -i "\$SSH_KEY" "\$SSH_USER@\$ip" "cd /opt/app && docker compose up -d"
     fi
   fi
