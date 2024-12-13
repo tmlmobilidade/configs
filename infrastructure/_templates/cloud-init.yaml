@@ -26,6 +26,13 @@ runcmd:
 
 # Optionally, add the default user to the Docker group to allow running Docker without sudo
   - sudo usermod -aG docker ${USER}
+  - sudo usermod -aG docker ubuntu
+  - sudo newgrp docker
+
+# Create the /opt/app directory
+  - sudo mkdir -p /opt/app
+  - sudo chown -R ubuntu:ubuntu /opt/app
+  - sudo chmod -R u+rwx /opt/app
 
 # Verify Docker installation
 final_message: "Docker has been installed and started successfully!"
