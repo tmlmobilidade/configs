@@ -2,7 +2,7 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                  PROMPT USER INPUT                  #
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 # Title section
 echo "\n"
@@ -42,7 +42,7 @@ done
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                  GENERATE USERS                     #
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 # Define allowed characters for passwords (excluding !, ", #, $, /, and =)
 ALLOWED_CHARACTERS="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz&%"
@@ -98,9 +98,9 @@ EOF
 for i in $(seq 1 $NUM_SHARDS); do
   for j in $(seq 1 $NUM_READ_REPLICAS); do
   cat <<EOF >> compose.yaml
-  
+
   shard-${SERVICE_NAME}-${i}-${ALPHABET_LOWER:$((j-1)):1}-db:
-  shard-${SERVICE_NAME}-${i}-${ALPHABET_LOWER:$((j-1)):1}-config:  
+  shard-${SERVICE_NAME}-${i}-${ALPHABET_LOWER:$((j-1)):1}-config:
 EOF
   done
 done
@@ -176,7 +176,7 @@ EOF
 done
 
 cat <<EOF >> compose.yaml
-  
+
   # # # # # # # # # # # # # # # # # # # # #
   # # # # # # # # # # # # # # # # # # # # #
 
@@ -263,14 +263,14 @@ echo "sh.enableSharding(\"production\");" >> scripts/init-router.js
 # db.createUser({
 #   user: "read",
 #   pwd: "${READ_PASSWORD}",
-#   roles: [ { role: "read", db: "admin" } ]
+#   roles: [ { role: "read", db: "production" } ]
 # })
 
 # // Create a read-write user
 # db.createUser({
 #   user: "write",
 #   pwd: "${WRITE_PASSWORD}",
-#   roles: [ { role: "readWrite", db: "admin" } ]
+#   roles: [ { role: "readWrite", db: "production" } ]
 # })
 # EOF
 

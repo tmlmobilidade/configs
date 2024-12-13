@@ -2,12 +2,12 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                      CONSTANTS                      #
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
 ALPHABET_LOWER="abcdefghijklmnopqrstuvwxyz"
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                      FUNCTIONS                      #
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 prompt_for_value() {
   local VAR_NAME=$1
@@ -94,7 +94,7 @@ docker_service_config() {
     command: mongod --configsvr --replSet rs-config-server --port 27017 --dbpath /data/db
     restart: always
     $(if [ "$LOCAL_SETUP" = true ]; then
-      echo "ports:" 
+      echo "ports:"
       echo "      - \"3700${REPLICA_NUMBER}:27017\""
     fi)
     volumes:
@@ -406,7 +406,7 @@ EOF
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                  PROMPT USER INPUT                  #
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 echo "\n"
 echo "+-----------------------------------------------+"
@@ -427,7 +427,7 @@ fi
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                  BUILD DIRECTORIES                  #
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
 mkdir -p $SERVICE_NAME
 cd $SERVICE_NAME
 
@@ -477,7 +477,7 @@ EOF
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                   Shards Servers                    #
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 # ===== Generate scripts =====
 for i in $(seq 1 $NUM_SHARDS); do
@@ -510,7 +510,7 @@ done
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                   Setup environment                 #
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 if [ "$LOCAL_SETUP" = true ]; then
 
@@ -531,7 +531,7 @@ fi
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #               PRODUCTION SETUP SCRIPT               #
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 cat <<EOF_SETUP > setup.sh
 #!/bin/bash
