@@ -1,5 +1,5 @@
 import { IDatabaseService } from '@/database/database.interface';
-import { IStorageService } from '@/storage/storage.interface';
+import { IStorageProvider } from '@tmlmobilidade/core/providers';
 import fs from 'fs';
 import path from 'path';
 
@@ -14,9 +14,9 @@ export interface BackupConfig {
 export class BackupService {
 	private readonly config: BackupConfig;
 	private readonly databaseService: IDatabaseService;
-	private readonly storageService: IStorageService;
+	private readonly storageService: IStorageProvider;
 
-	constructor(config: BackupConfig, databaseService: IDatabaseService, storageService: IStorageService) {
+	constructor(config: BackupConfig, databaseService: IDatabaseService, storageService: IStorageProvider) {
 		this.config = config;
 		this.databaseService = databaseService;
 		this.storageService = storageService;
@@ -62,7 +62,8 @@ export class BackupService {
 		await this.databaseService.backup(backupDir);
 
 		// Upload backup to storage
-		await this.storageService.uploadFile(path.join(this.config.remote_destination, timestamp), backupDir);
+		const backupFile = fs.readFileSync(backupDir + '.zip');
+		await this.storageService.uploadFile(path.join(this.config.remote_destination, timestamp + '.zip'), backupFile);
 
 		// Delete old backups
 		console.log('Deleting old backups...', {

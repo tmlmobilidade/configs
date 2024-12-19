@@ -1,10 +1,13 @@
+import { StorageConfiguration, StorageFactory } from '@tmlmobilidade/core/providers';
+
 import { BackupService } from './backup/backup.service';
 import { loadConfig } from './config/config-loader';
 import { DatabaseConfiguration, DatabaseFactory } from './database/database.factory';
 import { MailerService } from './mailer/mailer.service';
-import { StorageConfiguration, StorageFactory } from './storage/storage.factory';
 
-const config = loadConfig('/run/secrets/backupd_config');
+// const config = loadConfig('/run/secrets/backupd_config');
+
+const config = loadConfig('./config.yaml');
 
 const databaseConfig: DatabaseConfiguration = {
 	mongodb_config: config.database.mongodb_config,
@@ -14,7 +17,7 @@ const databaseConfig: DatabaseConfiguration = {
 
 const storageConfig: StorageConfiguration = {
 	aws_config: config.storage.aws_config,
-	// oci_config: config.storage.oci_config, // TODO: Add OCI Implementation
+	cloudflare_config: config.storage.r2_config,
 	type: config.storage.type,
 };
 

@@ -68,11 +68,6 @@ export class MongoDbService implements IDatabaseService {
 						zlib: { level: 9 }, // Sets the compression level.
 					});
 
-					output.on('close', () => {
-						console.log(`⤷ Backup has been zipped successfully. Total bytes: ${archive.pointer()}`);
-						resolve();
-					});
-
 					archive.on('error', (err) => {
 						console.error(`⤷ Error creating zip: ${err.message}`);
 						reject(err);
@@ -88,7 +83,11 @@ export class MongoDbService implements IDatabaseService {
 					archive.finalize();
 
 					// Remove the dump directory after zipping.
-					fs.rmSync(dumpDir, { recursive: true });
+					output.on('close', () => {
+						fs.rmSync(dumpDir, { recursive: true });
+						console.log(`⤷ Backup has been zipped successfully. Total bytes: ${archive.pointer()}`);
+						resolve();
+					});
 				}
 			});
 		});

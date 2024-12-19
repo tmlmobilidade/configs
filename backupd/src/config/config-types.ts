@@ -2,17 +2,14 @@ import { BackupConfig } from '@/backup/backup.service';
 import { MongoDbConfig } from '@/database/mongo.service';
 import { PostgresConfig } from '@/database/postgres.service';
 import { EmailConfig } from '@/mailer/mailer.service';
-import { AwsStorageServiceConfiguration } from '@/storage/aws-storage.service';
+import { S3StorageProviderConfiguration } from '@tmlmobilidade/core/providers';
 
 export interface StorageConfig {
-	aws_config?: AwsStorageServiceConfiguration
-	oci_config?: {
-		fingerprint: string
-		private_key_path: string
-		tenancy: string
-		user: string
-	}
-	type: 'aws' | 'oci'
+	aws_config?: S3StorageProviderConfiguration
+	r2_config?: {
+		endpoint: string
+	} & S3StorageProviderConfiguration
+	type: 'aws' | 'cloudflare'
 }
 
 export interface MongoDBOptions {

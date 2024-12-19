@@ -13,26 +13,35 @@ function validateConfig(config: AppConfig) {
 		throw new Error('Missing required field \'storage\' configuration.');
 	}
 
-	if (config.storage.type !== 'aws' && config.storage.type !== 'oci') {
-		throw new Error('Invalid storage type. Supported types are \'aws\' and \'oci\'.');
+	if (config.storage.type !== 'aws' && config.storage.type !== 'cloudflare') {
+		throw new Error('Invalid storage type. Supported types are \'aws\' and \'cloudflare\'.');
 	}
 
 	if (config.storage.type === 'aws') {
 		if (!config.storage.aws_config) {
 			throw new Error('Storage type is \'aws\' but \'aws_config\' is missing.');
 		}
-		const { aws_access_key_id, aws_secret_access_key, bucket_name, region } = config.storage.aws_config;
-		if (!aws_access_key_id || !aws_secret_access_key || !bucket_name || !region) {
-			throw new Error('Missing required fields in \'aws_config\'. Ensure \'aws_access_key_id\', \'aws_secret_access_key\', \'bucket_name\', and \'region\' are set.');
+		const { access_key_id, bucket_name, region, secret_access_key } = config.storage.aws_config;
+		if (!access_key_id || !secret_access_key || !bucket_name || !region) {
+			throw new Error('Missing required fields in \'aws_config\'. Ensure \'access_key_id\', \'secret_access_key\', \'bucket_name\', and \'region\' are set.');
 		}
 	}
-	else if (config.storage.type === 'oci') {
-		if (!config.storage.oci_config) {
-			throw new Error('Storage type is \'oci\' but \'oci_config\' is missing.');
+	// else if (config.storage.type === 'oci') {
+	// 	if (!config.storage.oci_config) {
+	// 		throw new Error('Storage type is \'oci\' but \'oci_config\' is missing.');
+	// 	}
+	// 	const { fingerprint, private_key_path, tenancy, user } = config.storage.oci_config;
+	// 	if (!tenancy || !user || !fingerprint || !private_key_path) {
+	// 		throw new Error('Missing required fields in \'oci_config\'. Ensure \'tenancy\', \'user\', \'fingerprint\', and \'private_key_path\' are set.');
+	// 	}
+	// }
+	else if (config.storage.type === 'cloudflare') {
+		if (!config.storage.r2_config) {
+			throw new Error('Storage type is \'r2\' but \'r2_config\' is missing.');
 		}
-		const { fingerprint, private_key_path, tenancy, user } = config.storage.oci_config;
-		if (!tenancy || !user || !fingerprint || !private_key_path) {
-			throw new Error('Missing required fields in \'oci_config\'. Ensure \'tenancy\', \'user\', \'fingerprint\', and \'private_key_path\' are set.');
+		const { access_key_id, bucket_name, endpoint, secret_access_key } = config.storage.r2_config;
+		if (!access_key_id || !bucket_name || !endpoint || !secret_access_key) {
+			throw new Error('Missing required fields in \'r2_config\'. Ensure \'access_key_id\', \'bucket_name\', \'endpoint\', and \'secret_access_key\' are set.');
 		}
 	}
 
